@@ -2,7 +2,7 @@ using CartService.Domain.Entities;
 using CartService.Domain.Repositories;
 using CartService.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Shared.Common.Infrastructure.Repositories;
+using Shared.Common.Infrastructure.Persistence;
 
 namespace CartService.Infrastructure.Repositories;
 

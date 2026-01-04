@@ -29,13 +29,21 @@ public class RedisCacheService : IRedisCacheService
         if (!value.HasValue)
             return default;
 
-        return JsonSerializer.Deserialize<T>(value!);
+        return JsonSerializer.Deserialize<T>(value.ToString());
     }
 
     public async Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default)
     {
         var json = JsonSerializer.Serialize(value);
-        await _database.StringSetAsync(key, json, expiration);
+        
+        if (expiration.HasValue)
+        {
+            await _database.StringSetAsync(key, json, expiration.Value);
+        }
+        else
+        {
+            await _database.StringSetAsync(key, json);
+        }
     }
 
     public async Task RemoveAsync(string key, CancellationToken cancellationToken = default)
