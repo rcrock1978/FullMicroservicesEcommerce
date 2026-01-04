@@ -1,0 +1,336 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecommerce-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecommerce_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_123}
+      POSTGRES_DB: ${POSTGRES_DB:-ecommerce_db}
+      POSTGRES_MULTIPLE_DATABASES: identity_db,product_db,order_db,payment_db,media_db,notification_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecommerce_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecommerce-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Seq - Structured Logging
+  seq:
+    image: datalust/seq:latest
+    container_name: ecommerce-seq
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: Y
+    ports:
+      - "5341:80"
+    volumes:
+      - seq_data:/data
+    networks:
+      - ecommerce-network
+
+  # Identity Service
+  identity-service:
+    build:
+      context: ./backend/services/IdentityService
+      dockerfile: Dockerfile
+    container_name: identity-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=identity_db;Username=${POSTGRES_USER:-ecommerce_user};Password=${POSTGRES_PASSWORD:-dev_password_123}
+      JwtSettings__Secret: ${JWT_SECRET:-your_jwt_secret_key_here_minimum_32_characters_required}
+      JwtSettings__Issuer: EcommerceAPI
+      JwtSettings__Audience: EcommerceClient
+      JwtSettings__ExpirationMinutes: 60
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+      Seq__ServerUrl: http://seq:80
+    ports:
+      - "5001:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  # Product Service
+  product-service:
+    build:
+      context: ./backend/services/ProductService
+      dockerfile: Dockerfile
+    container_name: product-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=product_db;Username=${POSTGRES_USER:-ecommerce_user};Password=${POSTGRES_PASSWORD:-dev_password_123}
+      ConnectionStrings__Redis: redis:6379
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+      Seq__ServerUrl: http://seq:80
+    ports:
+      - "5002:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  # Cart Service
+  cart-service:
+    build:
+      context: ./backend/services/CartService
+      dockerfile: Dockerfile
+    container_name: cart-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=cart_db;Username=${POSTGRES_USER:-ecommerce_user};Password=${POSTGRES_PASSWORD:-dev_password_123}
+      ConnectionStrings__Redis: redis:6379
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+      Seq__ServerUrl: http://seq:80
+    ports:
+      - "5003:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  # Order Service
+  order-service:
+    build:
+      context: ./backend/services/OrderService
+      dockerfile: Dockerfile
+    container_name: order-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=order_db;Username=${POSTGRES_USER:-ecommerce_user};Password=${POSTGRES_PASSWORD:-dev_password_123}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+      Seq__ServerUrl: http://seq:80
+    ports:
+      - "5004:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  # Payment Service
+  payment-service:
+    build:
+      context: ./backend/services/PaymentService
+      dockerfile: Dockerfile
+    container_name: payment-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=payment_db;Username=${POSTGRES_USER:-ecommerce_user};Password=${POSTGRES_PASSWORD:-dev_password_123}
+      Stripe__SecretKey: ${STRIPE_SECRET_KEY}
+      Stripe__PublishableKey: ${STRIPE_PUBLISHABLE_KEY}
+      Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+      Seq__ServerUrl: http://seq:80
+    ports:
+      - "5005:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  # Media Service
+  media-service:
+    build:
+      context: ./backend/services/MediaService
+      dockerfile: Dockerfile
+    container_name: media-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=media_db;Username=${POSTGRES_USER:-ecommerce_user};Password=${POSTGRES_PASSWORD:-dev_password_123}
+      AWS__AccessKey: ${AWS_ACCESS_KEY_ID}
+      AWS__SecretKey: ${AWS_SECRET_ACCESS_KEY}
+      AWS__Region: ${AWS_REGION:-us-east-1}
+      AWS__BucketName: ${AWS_S3_BUCKET_NAME}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+      Seq__ServerUrl: http://seq:80
+    ports:
+      - "5006:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ./backend/services/NotificationService
+      dockerfile: Dockerfile
+    container_name: notification-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=notification_db;Username=${POSTGRES_USER:-ecommerce_user};Password=${POSTGRES_PASSWORD:-dev_password_123}
+      SendGrid__ApiKey: ${SENDGRID_API_KEY}
+      SendGrid__FromEmail: ${SENDGRID_FROM_EMAIL:-noreply@ecommerce.com}
+      SendGrid__FromName: ${SENDGRID_FROM_NAME:-E-Commerce Store}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+      Seq__ServerUrl: http://seq:80
+    ports:
+      - "5007:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./backend/ApiGateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      JwtSettings__Secret: ${JWT_SECRET:-your_jwt_secret_key_here_minimum_32_characters_required}
+      JwtSettings__Issuer: EcommerceAPI
+      JwtSettings__Audience: EcommerceClient
+      ServiceUrls__IdentityService: http://identity-service
+      ServiceUrls__ProductService: http://product-service
+      ServiceUrls__CartService: http://cart-service
+      ServiceUrls__OrderService: http://order-service
+      ServiceUrls__PaymentService: http://payment-service
+      ServiceUrls__MediaService: http://media-service
+      ServiceUrls__NotificationService: http://notification-service
+      Seq__ServerUrl: http://seq:80
+    ports:
+      - "5000:80"
+    depends_on:
+      - identity-service
+      - product-service
+      - cart-service
+      - order-service
+      - payment-service
+      - media-service
+      - notification-service
+    networks:
+      - ecommerce-network
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend/ecommerce-web
+      dockerfile: Dockerfile
+    container_name: ecommerce-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:5000
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - ecommerce-network
+
+networks:
+  ecommerce-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  seq_data:
