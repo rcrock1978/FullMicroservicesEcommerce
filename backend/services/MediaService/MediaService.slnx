@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="MediaService.API/MediaService.API.csproj" />
+  <Project Path="MediaService.Application/MediaService.Application.csproj" />
+  <Project Path="MediaService.Contracts/MediaService.Contracts.csproj" />
+  <Project Path="MediaService.Domain/MediaService.Domain.csproj" />
+  <Project Path="MediaService.Infrastructure/MediaService.Infrastructure.csproj" />
+</Solution>
