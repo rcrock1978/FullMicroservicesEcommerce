@@ -27,6 +27,9 @@ public class Cart : AggregateRoot
         if (productId <= 0)
             throw new ArgumentException("Product ID must be greater than 0", nameof(productId));
 
+        if (string.IsNullOrWhiteSpace(productName))
+            throw new ArgumentException("Product name cannot be empty", nameof(productName));
+
         if (quantity <= 0)
             throw new ArgumentException("Quantity must be greater than 0", nameof(quantity));
 
@@ -41,7 +44,8 @@ public class Cart : AggregateRoot
         }
         else
         {
-            var cartItem = new CartItem(productId, productName, new Money(unitPrice), quantity, imageUrl);
+            var moneyValue = new Money(unitPrice);
+            var cartItem = new CartItem(productId, productName, moneyValue, quantity, imageUrl);
             _items.Add(cartItem);
         }
 

@@ -29,13 +29,13 @@ public class UpdateCartItemCommandHandler : IRequestHandler<UpdateCartItemComman
         var cart = await _cartRepository.GetByUserIdWithItemsAsync(request.UserId, cancellationToken);
 
         if (cart == null)
-            return Result<CartDto>.Failure(new CartNotFoundException(request.UserId));
+            return Result<CartDto>.Failure(new CartNotFoundException(request.UserId).Message);
 
         if (cart.IsExpired())
-            return Result<CartDto>.Failure(new CartExpiredException());
+            return Result<CartDto>.Failure(new CartExpiredException().Message);
 
         if (!cart.HasItem(request.ProductId))
-            return Result<CartDto>.Failure(new CartItemNotFoundException(request.ProductId));
+            return Result<CartDto>.Failure(new CartItemNotFoundException(request.ProductId).Message);
 
         cart.UpdateItemQuantity(request.ProductId, request.Quantity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

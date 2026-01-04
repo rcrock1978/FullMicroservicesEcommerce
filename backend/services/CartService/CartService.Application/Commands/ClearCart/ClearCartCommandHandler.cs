@@ -24,7 +24,7 @@ public class ClearCartCommandHandler : IRequestHandler<ClearCartCommand, Result>
         var cart = await _cartRepository.GetByUserIdWithItemsAsync(request.UserId, cancellationToken);
 
         if (cart == null)
-            return Result.Failure(new CartNotFoundException(request.UserId));
+            return Result.Failure(new CartNotFoundException(request.UserId).Message);
 
         cart.Clear();
         await _unitOfWork.SaveChangesAsync(cancellationToken);

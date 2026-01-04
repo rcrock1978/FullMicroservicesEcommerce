@@ -44,7 +44,7 @@ public class AddToCartCommandHandler : IRequestHandler<AddToCartCommand, Result<
         cart.AddItem(
             request.ProductId,
             request.ProductName,
-            new Money(request.UnitPrice),
+            request.UnitPrice,
             request.Quantity,
             request.ImageUrl);
 

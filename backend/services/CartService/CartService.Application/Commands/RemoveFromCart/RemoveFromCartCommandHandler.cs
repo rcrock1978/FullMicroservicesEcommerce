@@ -24,10 +24,10 @@ public class RemoveFromCartCommandHandler : IRequestHandler<RemoveFromCartComman
         var cart = await _cartRepository.GetByUserIdWithItemsAsync(request.UserId, cancellationToken);
 
         if (cart == null)
-            return Result.Failure(new CartNotFoundException(request.UserId));
+            return Result.Failure(new CartNotFoundException(request.UserId).Message);
 
         if (cart.IsExpired())
-            return Result.Failure(new CartExpiredException());
+            return Result.Failure(new CartExpiredException().Message);
 
         cart.RemoveItem(request.ProductId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
