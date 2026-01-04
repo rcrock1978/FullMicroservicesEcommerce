@@ -1,4 +1,3 @@
-using Shared.Common.Domain;
 using Shared.Common.Domain.Exceptions;
 
 namespace PaymentService.Domain.Exceptions;
@@ -6,12 +5,12 @@ namespace PaymentService.Domain.Exceptions;
 public class PaymentNotFoundException : NotFoundException
 {
     public PaymentNotFoundException(int paymentId)
-        : base("Payment", paymentId)
+        : base("Payment", paymentId, $"Payment with ID '{paymentId}' was not found.")
     {
     }
 
-    public PaymentNotFoundException(string stripePaymentIntentId)
-        : base("Payment", stripePaymentIntentId, $"Payment with Stripe payment intent ID '{stripePaymentIntentId}' was not found")
+    public PaymentNotFoundException(string paymentIntentId)
+        : base("Payment", paymentIntentId, $"Payment with PaymentIntentId '{paymentIntentId}' was not found.")
     {
     }
 }

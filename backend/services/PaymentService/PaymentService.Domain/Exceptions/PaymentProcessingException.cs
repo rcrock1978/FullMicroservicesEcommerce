@@ -6,7 +6,7 @@ public class PaymentProcessingException : Exception
     {
     }
 
-    public PaymentProcessingException(string message, Exception innerException)
+    public PaymentProcessingException(string message, Exception innerException) 
         : base(message, innerException)
     {
     }

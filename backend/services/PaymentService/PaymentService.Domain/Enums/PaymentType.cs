@@ -1,9 +1,10 @@
 namespace PaymentService.Domain.Enums;
 
-public enum PaymentMethodType
+public enum PaymentType
 {
     CreditCard = 0,
     DebitCard = 1,
     PayPal = 2,
-    Stripe = 3
+    Stripe = 3,
+    CashOnDelivery = 4
 }
