@@ -10,7 +10,7 @@ public class OrderNotFoundException : NotFoundException
     }
 
     public OrderNotFoundException(string orderNumber)
-        : base($"Order with number '{orderNumber}' was not found")
+        : base("Order", orderNumber, $"Order with number '{orderNumber}' was not found")
     {
     }
 }
