@@ -1,0 +1,130 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_PREFIX: ${{ github.repository_owner }}/ecommerce
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: 
+          - notification-service
+          - api-gateway
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore dependencies
+      run: |
+        if [ "${{ matrix.service }}" == "notification-service" ]; then
+          dotnet restore backend/services/NotificationService/NotificationService.sln
+        elif [ "${{ matrix.service }}" == "api-gateway" ]; then
+          dotnet restore backend/gateway/ApiGateway/ApiGateway.csproj
+        fi
+
+    - name: Build
+      run: |
+        if [ "${{ matrix.service }}" == "notification-service" ]; then
+          dotnet build backend/services/NotificationService/NotificationService.sln --configuration Release --no-restore
+        elif [ "${{ matrix.service }}" == "api-gateway" ]; then
+          dotnet build backend/gateway/ApiGateway/ApiGateway.csproj --configuration Release --no-restore
+        fi
+
+    - name: Test
+      run: |
+        if [ "${{ matrix.service }}" == "notification-service" ]; then
+          if [ -d "backend/services/NotificationService/NotificationService.Tests" ]; then
+            dotnet test backend/services/NotificationService/NotificationService.sln --configuration Release --no-build --verbosity normal
+          fi
+        fi
+
+    - name: Log in to Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      if: github.event_name != 'pull_request'
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}-${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+
+    - name: Build and push Docker image
+      if: github.event_name != 'pull_request'
+      uses: docker/build-push-action@v5
+      with:
+        context: |
+          ${{ matrix.service == 'notification-service' && 'backend/services/NotificationService' || 
+              matrix.service == 'api-gateway' && 'backend/gateway/ApiGateway' || '' }}
+        file: |
+          ${{ matrix.service == 'notification-service' && 'backend/services/NotificationService/NotificationService.API/Dockerfile' || 
+              matrix.service == 'api-gateway' && 'backend/gateway/ApiGateway/Dockerfile' || '' }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+  deploy-to-kubernetes:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/00-namespace.yaml
+        kubectl apply -f k8s/01-postgres.yaml
+        kubectl apply -f k8s/02-redis.yaml
+        kubectl apply -f k8s/10-notification-service.yaml
+        kubectl apply -f k8s/20-api-gateway.yaml
+
+    - name: Restart deployments
+      run: |
+        kubectl rollout restart deployment/notification-service -n ecommerce
+        kubectl rollout restart deployment/api-gateway -n ecommerce
+
+    - name: Wait for deployments
+      run: |
+        kubectl rollout status deployment/notification-service -n ecommerce --timeout=5m
+        kubectl rollout status deployment/api-gateway -n ecommerce --timeout=5m
+
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n ecommerce
+        kubectl get services -n ecommerce
