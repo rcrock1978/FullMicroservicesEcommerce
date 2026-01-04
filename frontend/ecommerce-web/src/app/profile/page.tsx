@@ -300,12 +300,7 @@ export default function ProfilePage() {
               <span className="font-medium">Role:</span> {user.role}
             </p>
             <p>
-              <span className="font-medium">Email Verified:</span>{' '}
-              {user.emailConfirmed ? (
-                <span className="text-green-600">Yes</span>
-              ) : (
-                <span className="text-amber-600">No</span>
-              )}
+              <span className="font-medium">Email:</span> {user.email}
             </p>
           </div>
         </div>

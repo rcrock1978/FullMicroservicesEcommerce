@@ -113,9 +113,9 @@ export default function CategoryDetailPage() {
                 className="aspect-square relative mb-4 bg-gray-100 rounded-lg overflow-hidden cursor-pointer"
                 onClick={() => router.push(`/products/${product.id}`)}
               >
-                {product.imageUrls && product.imageUrls.length > 0 ? (
+                {product.imageUrl ? (
                   <Image
-                    src={product.imageUrls[0]}
+                    src={product.imageUrl}
                     alt={product.name}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform duration-300"
