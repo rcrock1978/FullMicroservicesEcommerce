@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberArk-ServiceNow Sync Issue – All Safes Marked Inactive & Proposed Fix</title>
+</head>
+<body style="margin: 0; padding: 20px; background-color: #f4f4f4; font-family: 'Segoe UI', Arial, sans-serif; color: #333; line-height: 1.6;">
+    <div style="max-width: 700px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        
+        <!-- Email Header -->
+        <div style="border-bottom: 3px solid #1e3a8a; padding-bottom: 20px; margin-bottom: 25px;">
+            <div style="margin-bottom: 10px;">
+                <strong style="color: #1e3a8a; font-size: 16px;">Subject:</strong> 
+                <span style="font-size: 16px;">CyberArk-ServiceNow Sync Issue – All Safes Marked Inactive &amp; Proposed Fix</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                <strong style="color: #1e3a8a;">To:</strong> Gediminas
+            </div>
+            <div>
+                <strong style="color: #1e3a8a;">From:</strong> Raymund Caringal
+            </div>
+        </div>
+
+        <!-- Email Body -->
+        <div style="margin-bottom: 25px;">
+            <p style="margin-bottom: 15px;">Hi Gediminas,</p>
+            <p style="margin-bottom: 15px;">I hope you're doing well. I'm reaching out regarding the issue where <strong>all safes were marked as inactive</strong> in the ServiceNow (<code style="background-color: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace;">u_cyberark_safes</code>) table.</p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 25px 0;">
+
+        <!-- Key Clarification Section -->
+        <div style="margin-bottom: 25px;">
+            <h3 style="color: #1e3a8a; font-size: 18px; margin-bottom: 12px; border-bottom: 2px solid #60a5fa; padding-bottom: 5px;">Key Clarification</h3>
+            <p style="margin-bottom: 15px;">The sync job is <strong>not hosted on the servers we manage</strong> — it resides entirely within <strong>ServiceNow</strong>. I also do not have access to the <strong>SNOW production logs</strong>, which limits my ability to investigate further from our side.</p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 25px 0;">
+
+        <!-- Root Cause Analysis Section -->
+        <div style="margin-bottom: 25px;">
+            <h3 style="color: #1e3a8a; font-size: 18px; margin-bottom: 12px; border-bottom: 2px solid #60a5fa; padding-bottom: 5px;">Root Cause Analysis</h3>
+            <p style="margin-bottom: 15px;">Based on my review of the sync job code, I believe the most likely cause is that the <strong>SOAP API call (<code style="background-color: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace;">GetAllSafes</code>) returned an empty or malformed response</strong>. This could be due to an <strong>access or connectivity issue</strong> between ServiceNow and the CyberArk API.</p>
+            <p style="margin-bottom: 15px;">When the API returns no safes, the sync logic interprets this as "all safes have been removed" and <strong>deactivates every record</strong> in the ServiceNow table.</p>
+            
+            <!-- Code Block -->
+            <div style="background-color: #1e293b; color: #e2e8f0; padding: 20px; border-radius: 6px; overflow-x: auto; margin: 20px 0; border-left: 4px solid #3b82f6;">
+                <pre style="margin: 0; font-family: 'Courier New', 'Consolas', monospace; font-size: 14px; line-height: 1.5;"><code>var response = JSON.parse(logic.GetAllSafes());  <span style="color: #94a3b8;">// ← Could fail or return empty</span>
+var safes = response.Safes;                       <span style="color: #94a3b8;">// ← Could be null/undefined/empty</span></code></pre>
+            </div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 25px 0;">
+
+        <!-- Current Sync Process Section -->
+        <div style="margin-bottom: 25px;">
+            <h3 style="color: #1e3a8a; font-size: 18px; margin-bottom: 12px; border-bottom: 2px solid #60a5fa; padding-bottom: 5px;">Current Sync Process</h3>
+            
+            <!-- Sync Diagram -->
+            <div style="background-color: #f8fafc; padding: 25px; border-radius: 6px; margin: 20px 0; border: 1px solid #cbd5e1;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <div style="flex: 1; text-align: center;">
+                        <div style="background-color: #3b82f6; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+                            <strong style="font-size: 16px; display: block; margin-bottom: 8px;">CyberArk</strong>
+                            <span style="font-size: 13px; color: #dbeafe;">(Source)</span>
+                        </div>
+                    </div>
+                    <div style="flex: 0 0 auto; margin: 0 20px;">
+                        <div style="text-align: center;">
+                            <span style="font-size: 24px; color: #64748b;">◄──── Sync ────►</span>
+                        </div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <div style="background-color: #10b981; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+                            <strong style="font-size: 16px; display: block; margin-bottom: 8px;">ServiceNow</strong>
+                            <span style="font-size: 13px; color: #d1fae5;">u_cyberark_safes</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Process Steps -->
+            <ol style="padding-left: 25px; margin: 15px 0;">
+                <li style="margin-bottom: 10px;"><strong>Fetch</strong> all safes from CyberArk via SOAP API</li>
+                <li style="margin-bottom: 10px;"><strong>Add</strong> new safes from CyberArk → ServiceNow</li>
+                <li style="margin-bottom: 10px;"><strong>Activate/Deactivate</strong> ServiceNow records based on CyberArk data</li>
+            </ol>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 25px 0;">
+
+        <!-- Proposed Safeguards Section -->
+        <div style="margin-bottom: 25px;">
+            <h3 style="color: #1e3a8a; font-size: 18px; margin-bottom: 12px; border-bottom: 2px solid #60a5fa; padding-bottom: 5px;">Proposed Safeguards</h3>
+            
+            <!-- Safeguards Table -->
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-radius: 6px; overflow: hidden;">
+                <thead>
+                    <tr style="background-color: #1e3a8a; color: white;">
+                        <th style="padding: 12px; text-align: center; font-weight: 600; width: 8%;">#</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600; width: 35%;">Safeguard</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600; width: 57%;">Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background-color: #f8fafc;">
+                        <td style="padding: 12px; text-align: center; border-bottom: 1px solid #e2e8f0;">1</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;"><strong>Validate API Response</strong></td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">Abort the sync if the API returns an empty or null response</td>
+                    </tr>
+                    <tr style="background-color: #ffffff;">
+                        <td style="padding: 12px; text-align: center; border-bottom: 1px solid #e2e8f0;">2</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;"><strong>Minimum Threshold Check</strong></td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">Abort the sync if the number of safes returned falls below a defined minimum</td>
+                    </tr>
+                    <tr style="background-color: #f8fafc;">
+                        <td style="padding: 12px; text-align: center; border-bottom: 1px solid #e2e8f0;">3</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;"><strong>Deactivation Percentage Cap</strong></td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">Limit the number of records that can be deactivated in a single run (e.g., max 20%)</td>
+                    </tr>
+                    <tr style="background-color: #ffffff;">
+                        <td style="padding: 12px; text-align: center;">4</td>
+                        <td style="padding: 12px;"><strong>Try/Catch Error Handling</strong></td>
+                        <td style="padding: 12px;">Catch and log unexpected errors to prevent uncontrolled behavior</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p style="margin-top: 15px;">These safeguards work together to provide <strong>defense-in-depth</strong>, ensuring that no single point of failure can trigger a mass deactivation.</p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 25px 0;">
+
+        <!-- Next Steps Section -->
+        <div style="margin-bottom: 25px;">
+            <h3 style="color: #1e3a8a; font-size: 18px; margin-bottom: 12px; border-bottom: 2px solid #60a5fa; padding-bottom: 5px;">Next Steps</h3>
+            <ol style="padding-left: 25px; margin: 15px 0;">
+                <li style="margin-bottom: 10px;">Could you help verify the <strong>SNOW production logs</strong> to confirm whether the API returned an empty response?</li>
+                <li style="margin-bottom: 10px;">If confirmed, I can provide the <strong>detailed code changes</strong> for each safeguard listed above.</li>
+            </ol>
+            <p style="margin-top: 15px;">Please let me know if you'd like to discuss this further.</p>
+            <p style="margin-top: 15px;">Thank you.</p>
+        </div>
+
+        <!-- Email Signature -->
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
+            <p style="margin-bottom: 5px;"><strong>Best Regards,</strong></p>
+            <p style="margin-bottom: 0; color: #1e3a8a; font-weight: 600; font-size: 15px;">Raymund Caringal</p>
+        </div>
+
+    </div>
+</body>
+</html>
